@@ -19,6 +19,6 @@ conda activate stabilization        # Activates the env
 ---
 Authors:
 
-- [Guilherme Franco](xfranc01@stud.fit.vutbr.cz)
-- [Miguel Rodrigues](xboave00@stud.fit.vutbr.cz)
+- [Guilherme Franco](mailto:xfranc01@stud.fit.vutbr.cz)
+- [Miguel Rodrigues](mailto:xboave00@stud.fit.vutbr.cz)
 
