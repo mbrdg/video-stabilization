@@ -1,89 +1,59 @@
 """
-Created on Sat January 4 14:00:41 2017
-A script for determining inliers using RANSAC
-@author: Faizaan Naveed
+@author: Akash Agarwal, Nupur Nimbekar, Anubhava Paras - ENPM673 HW1
 """
 
 import numpy as np
-import Transformations
+import math
 
 
-def SumEucDistance(P1, P1_Co, P2, P2_Co):
-    # Computes the sum of the euclidean distance between P1 and P1_Co and P2 and P2_Co
-    # P1_Co represents the transformed coordinates
-    # P2_Co represents the inverse transformed coordinates
+class RansacModel:
+    def __init__(self, curve_fitting_model):
+        self.curve_fitting_model = curve_fitting_model
 
-    d1 = np.sqrt(
-        np.power(P1[:, 0] - P1_Co[:, 0], 2) + np.power(P1[:, 1] - P1_Co[:, 1], 2)
-    )
-    d2 = np.sqrt(
-        np.power(P2[:, 0] - P2_Co[:, 0], 2) + np.power(P2[:, 1] - P2_Co[:, 1], 2)
-    )
+    def fit(self, A, Y, num_sample, threshold):
+        num_iterations = math.inf
+        iterations_done = 0
+        num_sample = 3
 
-    return d1 + d2
+        max_inlier_count = 0
+        best_model = None
 
+        prob_outlier = 0.5
+        desired_prob = 0.95
 
-def Ransac(Matches, N, Epsilon):
-    # Random sample consensus(RANSAC) is an iterative method to estimate parameters
-    # of a mathematical model from a set of observed data that contains outliers.
-    # By iteratively fitting a model to the data we find the best model by its ability
-    # to characterize a threshold of inlier points.
+        total_data = np.column_stack((A, Y))  ## [ A | Y]
+        data_size = len(total_data)
 
-    # Input: Corresponding Image coordinates in the two images (Matches)
-    #        Threshold number of inlier points (N)
-    #        Threshold value for Sum of Squared differences (Epsilon)
-    # Outputs: Number of inlier points
-    #          Homography transformation matrix
+        # Adaptively determining the number of iterations
+        while num_iterations > iterations_done:
+            # shuffle the rows and take the first 'num_sample' rows as sample data
+            np.random.shuffle(total_data)
+            sample_data = total_data[:num_sample, :]
 
-    # Inlier count
-    In_count = 0
+            estimated_model = self.curve_fitting_model.fit(
+                sample_data[:, :-1], sample_data[:, -1:]
+            )  ## [a b c]
 
-    # Inlier array
-    Inlier_Data = []
+            # count the inliers within the threshold
+            y_cap = A.dot(estimated_model)
+            err = np.abs(Y - y_cap.T)
+            inlier_count = np.count_nonzero(err < threshold)
 
-    while In_count < N:
-        # Randomly pick out points from the matches
-        r = np.round(
-            (len(Matches) - 1)
-            * np.random.random(np.int(np.round(len(Matches) / 2)) + 1)
-        ).astype(int)
-        Subsample = Matches[r, :]
+            # check for the best model
+            if inlier_count > max_inlier_count:
+                max_inlier_count = inlier_count
+                best_model = estimated_model
 
-        # Keep track of the inliers
-        if In_count > 0:
-            Subsample = np.concatenate((Subsample, np.asarray(Inlier_Data)), axis=0)
+            prob_outlier = 1 - inlier_count / data_size
+            print("# inliers:", inlier_count)
+            print("# prob_outlier:", prob_outlier)
+            num_iterations = math.log(1 - desired_prob) / math.log(
+                1 - (1 - prob_outlier) ** num_sample
+            )
+            iterations_done = iterations_done + 1
 
-        # Isolate the matches
-        Image_Coords_1 = np.asarray(Subsample)[:, 0:2]
-        Image_Coords_2 = np.asarray(Subsample)[:, 2:4]
+            print("# s:", iterations_done)
+            print("# n:", num_iterations)
+            print("# max_inlier_count: ", max_inlier_count)
 
-        # Homography
-        # Compute the homography matrix
-        H = Transformations.Homography(Image_Coords_1, Image_Coords_2)
-
-        # Compute the transformation and the inverse transformation
-        X2 = Transformations.HomographyTransformer(H, Matches[:, 0:2])
-        X1 = Transformations.HomographyTransformer(np.linalg.inv(H), Matches[:, 2:4])
-
-        # Compute the euclidean distance
-        ssd = SumEucDistance(X1, Matches[:, 0:2], X2, Matches[:, 2:4])
-
-        # Extract the outliers
-        for i in range(0, len(ssd)):
-            if ssd[i] < Epsilon:
-                if [
-                    Matches[i, 0],
-                    Matches[i, 1],
-                    Matches[i, 2],
-                    Matches[i, 3],
-                ] not in np.asarray(Inlier_Data).tolist():
-                    Inlier_Data.append(Matches[i, :])
-                    In_count += 1
-                    print(In_count)
-
-    # Compute the transformation using the inliers
-    Inlier_Data = np.asarray(Inlier_Data, dtype=float)
-
-    return Inlier_Data, Transformations.Homography(
-        Inlier_Data[:, 0:2], Inlier_Data[:, 2:4]
-    )
+        return best_model
