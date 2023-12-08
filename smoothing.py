@@ -3,8 +3,6 @@ import math
 import pandas as pd
 from matplotlib import pyplot as plt
 
-SMOOTHING_RADIUS = 5  # temporary
-
 
 def average_filter(curve, radius):
     window_size = 2 * radius + 1
@@ -20,13 +18,11 @@ def average_filter(curve, radius):
     return curve_smoothed
 
 
-def smooth(trajectory):
+def smooth(trajectory, radius):
     smoothed_trajectory = np.copy(trajectory)
     # Filter the x, y and angle curves
     for i in range(3):
-        smoothed_trajectory[:, i] = average_filter(
-            trajectory[:, i], radius=SMOOTHING_RADIUS
-        )
+        smoothed_trajectory[:, i] = average_filter(trajectory[:, i], radius)
 
     return smoothed_trajectory
 
