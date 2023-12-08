@@ -1,7 +1,7 @@
 import numpy as np
-import math
-import pandas as pd
-from matplotlib import pyplot as plt
+
+# globals
+SMOOTHING_RADIUS = 10
 
 
 def average_filter(curve, radius):
