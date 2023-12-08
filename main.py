@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import smoothing
 import torchvision.transforms.functional as F
 from torchvision.io import read_video
 from torchvision.models.optical_flow import raft_small, Raft_Small_Weights
@@ -16,7 +15,6 @@ from torchvision.utils import flow_to_image
 plt.rcParams["savefig.bbox"] = "tight"
 weights = Raft_Small_Weights.DEFAULT
 transforms = weights.transforms()
-SMOOTHING_RADIUS = 5
 
 
 def parse_arguments():
@@ -96,21 +94,6 @@ def main():
         ax[0].imshow(np.asarray(original_img))
         ax[1].imshow(np.asarray(flow_img))
         return ax
-
-    def motion_compensation(transformations):
-        # Compute trajectory using cumulative sum of transformations
-        trajectory = np.cumsum(transformations, axis=0)
-
-        # Smooth trajectory using moving average filter
-        smoothed_trajectory = smoothing.smooth(trajectory, SMOOTHING_RADIUS)
-
-        # Calculate difference in smoothed_trajectory and trajectory
-        difference = smoothed_trajectory - trajectory
-
-        # Calculate newer transformation array
-        transforms_smooth = transformations + difference
-
-        return transforms_smooth
 
     animation.FuncAnimation(
         fig, animate_callback, repeat=False, frames=flow_imgs.shape[0]

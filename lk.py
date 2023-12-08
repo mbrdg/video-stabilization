@@ -1,11 +1,12 @@
 from argparse import ArgumentParser
-from pathlib import Path
 
 import numpy as np
 import cv2
 
+import smoothing
 
-def optical_flow(video: str) -> None:
+
+def main(video: str) -> None:
     """Computes optical-flow using Lucas-Kanade Method"""
 
     shi_tomasi_params = {
@@ -21,20 +22,19 @@ def optical_flow(video: str) -> None:
         "criteria": (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03),
     }
 
-    rng = np.random.default_rng()
-    tracking_colors = rng.integers(0, 255, size=(100, 3))
-
     capture = cv2.VideoCapture(video)
+    number_of_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    transformations = np.empty((number_of_frames - 1, 3))
 
     ret, prev_frame = capture.read()
     prev_gray_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
     prev_pts = cv2.goodFeaturesToTrack(prev_gray_frame, mask=None, **shi_tomasi_params)
 
-    drawing_mask = np.zeros_like(prev_frame)
-
     while capture.isOpened():
         ret, frame = capture.read()
-        if not ret:
+        current_frame = int(capture.get(cv2.CAP_PROP_POS_FRAMES))
+
+        if not ret or number_of_frames - current_frame < 2:
             print("info: finished reading the capture")
             break
 
@@ -49,36 +49,78 @@ def optical_flow(video: str) -> None:
         next_pts = curr_pts[status == 1]
         curr_pts = prev_pts[status == 1]
 
-        # homography, status = cv2.findHomography(curr_pts, next_pts, cv2.RANSAC)
-        # cv2.decomposeHomographyMat(homography, )
-        # print(homography)
+        affine = cv2.estimateAffine2D(curr_pts, next_pts)
+        dx = affine[0][0][2]
+        dy = affine[0][1][2]
+        da = np.arctan2(affine[0][1][0], affine[0][0][0])
 
-        for i, (new, old) in enumerate(zip(next_pts, curr_pts)):
-            a, b = new.ravel()
-            c, d = old.ravel()
-            drawing_mask = cv2.line(
-                drawing_mask,
-                (int(a), int(b)),
-                (int(c), int(d)),
-                tracking_colors[i].tolist(),
-                2,
-            )
-            frame = cv2.circle(
-                frame, (int(a), int(b)), 5, tracking_colors[i].tolist(), -1
-            )
-
-        img = cv2.add(frame, drawing_mask)
-        cv2.imshow("frame", img)
-
-        key = cv2.waitKey(30) & 0xFF
-        if key == 27:
-            break
+        current_frame = int(capture.get(cv2.CAP_PROP_POS_FRAMES))
+        transformations[current_frame] = [dx, dy, da]
 
         prev_gray_frame = gray_frame.copy()
         prev_pts = curr_pts.reshape(-1, 1, 2)
 
+        # cv2.imshow("frame", frame)
+        # key = cv2.waitKey(30) & 0xFF
+        # if key == 27:
+        #    break
+
+    smoothed_transforms = motion_compensation(transformations)
+
+    capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+    while capture.isOpened():
+        ret, frame = capture.read()
+        current_frame = int(capture.get(cv2.CAP_PROP_POS_FRAMES))
+
+        if current_frame == 0:
+            continue
+
+        if not ret or number_of_frames - current_frame < 2:
+            print("info: finished reading the capture")
+            break
+
+        dx = smoothed_transforms[current_frame, 0]
+        dy = smoothed_transforms[current_frame, 1]
+        da = smoothed_transforms[current_frame, 2]
+        transformation_matrix = np.array([
+            [np.cos(da), -np.sin(da), dx],
+            [np.sin(da), np.cos(da), dy],
+        ])
+
+        w, h, _ = frame.shape
+        stabilized_frame = cv2.warpAffine(frame, transformation_matrix, (w, h))
+        img = crop(stabilized_frame)
+ 
+        cv2.imshow("frame", img)
+        key = cv2.waitKey(30) & 0xFF
+        if key == 27:
+            break
+
     capture.release()
     cv2.destroyAllWindows()
+
+
+def motion_compensation(transforms: np.ndarray) -> np.ndarray:
+    # Compute trajectory using cumulative sum of transformations
+    trajectory = np.cumsum(transforms, axis=0)
+
+    # Smooth trajectory using moving average filter
+    smoothed_trajectory = smoothing.smooth(trajectory, smoothing.SMOOTHING_RADIUS)
+
+    # Calculate difference in smoothed_trajectory and trajectory
+    difference = smoothed_trajectory - trajectory
+
+    # Calculate newer transformation array
+    smoothed_transforms = transforms + difference
+    return smoothed_transforms
+
+
+def crop(frame: np.ndarray, crop_ratio: float = 0.04) -> np.ndarray:
+    w, h, _ = frame.shape
+    rotation_matrix = cv2.getRotationMatrix2D((h // 2, w // 2), 0, 1.0 + crop_ratio)
+    cropped_frame = cv2.warpAffine(frame, rotation_matrix, (h, w))
+    return cropped_frame
 
 
 if __name__ == "__main__":
@@ -87,4 +129,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    optical_flow(args.input)
+    main(args.input)
