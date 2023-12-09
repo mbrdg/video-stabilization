@@ -1,4 +1,6 @@
 from argparse import ArgumentParser
+import logging
+from typing import List
 
 import numpy as np
 import cv2
@@ -11,66 +13,12 @@ import smoothing
 
 def main(video: str) -> None:
     """Computes optical-flow using Lucas-Kanade Method"""
-
-    shi_tomasi_params = {
-        "maxCorners": 100,
-        "qualityLevel": 0.3,
-        "minDistance": 7,
-        "blockSize": 7,
-    }
-
-    lk_params = {
-        "winSize": (15, 15),
-        "maxLevel": 2,
-        "criteria": (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03),
-    }
-
+    
     capture = cv2.VideoCapture(video)
     number_of_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-    transformations = np.empty((number_of_frames - 1, 3))
 
-    ret, prev_frame = capture.read()
-    prev_gray_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-    prev_pts = cv2.goodFeaturesToTrack(prev_gray_frame, mask=None, **shi_tomasi_params)
-
-    while capture.isOpened():
-        ret, frame = capture.read()
-        current_frame = int(capture.get(cv2.CAP_PROP_POS_FRAMES))
-
-        if not ret or number_of_frames - current_frame < 2:
-            print("info: finished reading the capture")
-            break
-
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        curr_pts, status, _ = cv2.calcOpticalFlowPyrLK(
-            prev_gray_frame, gray_frame, prev_pts, None, **lk_params
-        )
-
-        if curr_pts is None:
-            continue
-
-        next_pts = curr_pts[status == 1]
-        curr_pts = prev_pts[status == 1]
-
-        affine = cv2.estimateAffine2D(curr_pts, next_pts)
-        dx = affine[0][0][2]
-        dy = affine[0][1][2]
-        da = np.arctan2(affine[0][1][0], affine[0][0][0])
-
-        current_frame = int(capture.get(cv2.CAP_PROP_POS_FRAMES))
-        transformations[current_frame] = [dx, dy, da]
-
-        prev_gray_frame = gray_frame.copy()
-        prev_pts = curr_pts.reshape(-1, 1, 2)
-
-        # cv2.imshow("frame", frame)
-        # key = cv2.waitKey(30) & 0xFF
-        # if key == 27:
-        #    break
-
+    transformations = get_transformations_between_frames(capture)
     smoothed_transforms = motion_compensation(transformations)
-
-    capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     while capture.isOpened():
         ret, frame = capture.read()
@@ -105,6 +53,83 @@ def main(video: str) -> None:
 
     capture.release()
     cv2.destroyAllWindows()
+
+
+def decompose_affine_matrix(matrix: np.ndarray) -> List[float]:
+    """
+    Decomposes an affine transformation matrix into the following components:
+    [dx, dy, da], where: `dx` and `dy` represent the translation displacement
+    and `da` represents the rotation displacemnt between consecutive frames.
+
+    Params:
+    -------
+    matrix -- matrix to be decomposed.
+
+    Returns:
+    --------
+    A decomposed matrix in the form of [dx, dy, da].
+    """
+    dx = matrix[0][0][2]
+    dy = matrix[0][1][2]
+    da = np.arctan2(matrix[0][1][0], matrix[0][0][0])
+
+    return [dx, dy, da]
+
+
+def get_transformations_between_frames(capture: cv2.VideoCapture) -> np.ndarray:
+    """
+    Gets the transformations between frames using sparse Lucas-Kanade optical 
+    flow method. Resets the capture back to the initial frame before finishing.
+
+    Params:
+    -------
+    capture: a VideoCapture object with the video to be stabilized.
+
+    Returns:
+    --------
+    An array containing the decomposed affine transformations between frames.
+    """
+    number_of_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    
+    transformations = np.empty(shape=(number_of_frames - 1, 3))
+
+    success, prev_frame = capture.read()
+    prev_gray_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+
+    for frame_idx in range(number_of_frames - 1):           
+        old_corners = cv2.goodFeaturesToTrack(
+            prev_gray_frame, mask=None,
+            maxCorners=100, qualityLevel=0.3, minDistance=7, blockSize=7
+        )
+
+        success, curr_frame = capture.read()
+        if not success:
+            logging.info("finished reading capture")
+            break
+
+        curr_gray_frame = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
+        new_corners, status, _ = cv2.calcOpticalFlowPyrLK(
+            prev_gray_frame, curr_gray_frame, old_corners, None,
+            winSize=(15, 15), maxLevel=2,
+            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
+        )
+
+        if new_corners is None:
+            logging.warning(f"unable to detect new valid corners in frame {frame_idx}")
+            continue
+
+        good_points = np.where(status == 1)[0]
+        new_corners = new_corners[good_points]
+        old_corners = old_corners[good_points]
+
+        affine_matrix = cv2.estimateAffine2D(new_corners, old_corners)
+        transformations[frame_idx] = decompose_affine_matrix(affine_matrix)
+
+        prev_gray_frame = curr_gray_frame
+    
+    capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    return transformations
 
 
 def motion_compensation(transforms: np.ndarray) -> np.ndarray:
