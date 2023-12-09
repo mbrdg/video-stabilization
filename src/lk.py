@@ -3,6 +3,8 @@ from argparse import ArgumentParser
 import numpy as np
 import cv2
 from numpy.fft import fft2, ifft2
+from skimage import restoration
+from scipy.signal import convolve2d
 
 import smoothing
 
@@ -94,8 +96,9 @@ def main(video: str) -> None:
         w, h, _ = frame.shape
         stabilized_frame = cv2.warpAffine(frame, transformation_matrix, (w, h))
         img = crop(stabilized_frame)
+        img2 = wiener_filter_2(img)
 
-        cv2.imshow("frame", img)
+        cv2.imshow("frame", img2)
         key = cv2.waitKey(30) & 0xFF
         if key == 27:
             break
@@ -167,7 +170,7 @@ def low_pass_filtering_3(frame):
     return cv2.GaussianBlur(frame, (5, 5), 0)
 
 
-def wiener_filter(frame):
+def wiener_filter_1(frame):
     kernel = np.array(
         [
             [1, 1, 1, 1, 1],
@@ -187,6 +190,13 @@ def wiener_filter(frame):
     dummy = dummy * kernel
     dummy = np.abs(ifft2(dummy))
     return dummy
+
+
+def wiener_filter_2(frame):  # somos capazes de ter de meter a imagem a cinzento
+    psf = np.ones((5, 5)) / 25
+    img = convolve2d(frame, psf, "same")
+    img += 0.1 * img.std() * np.random.standard_normal(img.shape)
+    return restoration.wiener(img, psf, 1100)
 
 
 if __name__ == "__main__":
