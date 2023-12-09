@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 import numpy as np
 import cv2
 
-import smoothing
+from smoothing import low_pass_filter
 from plotting import plot_transformations, plot_trajectories
 
 
@@ -76,11 +76,12 @@ def get_transformations_between_frames(capture: cv2.VideoCapture) -> np.ndarray:
     return transformations
 
 
-def motion_compensation(transforms: np.ndarray,
-                        *, plot: bool) -> np.ndarray:
+def motion_compensation(
+        transforms: np.ndarray, *, plot: bool
+    ) -> np.ndarray:
     # Compute trajectory using cumulative sum of transformations
     trajectory = np.cumsum(transforms, axis=0)
-    smoothed_trajectory = smoothing.moving_average_filter(trajectory)
+    smoothed_trajectory = low_pass_filter(trajectory)
 
     if plot:
         plot_trajectories(trajectory, smoothed_trajectory)

@@ -1,22 +1,24 @@
+# smoothing.py
 import numpy as np
 import cv2
 from numpy.fft import fft2, ifft2
 from skimage import restoration
+from scipy.signal import savgol_filter
 from scipy.signal import convolve2d
 
 
-def moving_average_filter(
-        trajectory: np.ndarray, iterations: int = 3, radius: int = 30
+def low_pass_filter(
+        trajectory: np.ndarray,
+        iterations: int = 1,
+        radius: int = 30,
+        order: int = 1,
     ) -> np.ndarray:
     """
-    Moving average filter.
-    Steps:
-        1. Create the filter
-        2. For iteration in iterations
-            1. Pad the curve in the edges by the radius
-            2. Convolution with the filter
-            3. Remove the padding
-    
+    Low-pass filter employing the Savitzky-Golay method.
+    If `order` is set to 1 then this acts as a moving average filter.
+    This function acts as a wrapper over scipy.signal.savgol_filter, thus,
+    for more infor consult its own documentation.
+
     Params:
     -------
     trajectory -- curve to be smoothed.
@@ -26,44 +28,16 @@ def moving_average_filter(
     Returns:
     --------
     smoothed_trajectory -- copy of the trajectory, smoothed.
-
     """
     smoothed_trajectory = np.copy(trajectory)
-    
+
     window_size = 2 * radius + 1
-    f = np.full(window_size, 1 / window_size)
-
-    def apply(curve):
-        padded = np.lib.pad(curve, (radius, radius), "edge")
-        smoothed = np.convolve(padded, f, mode="same")
-        return smoothed[radius:-radius]
-
     for _ in range(iterations):
-        smoothed_trajectory[:, 0] = apply(smoothed_trajectory[:, 0])
-        smoothed_trajectory[:, 1] = apply(smoothed_trajectory[:, 1])
-        smoothed_trajectory[:, 2] = apply(smoothed_trajectory[:, 2])
+        smoothed_trajectory = savgol_filter(
+            smoothed_trajectory, window_size, order, axis=0, mode="nearest"
+        )
 
     return smoothed_trajectory
-
-
-def low_pass_filtering_2(frame):
-    # prepare the 5x5 shaped filter
-    kernel = np.array(
-        [
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-        ]
-    )
-    kernel = kernel / sum(kernel)
-
-    return cv2.filter2D(frame, -1, kernel)
-
-
-def low_pass_filtering_3(frame):
-    return cv2.GaussianBlur(frame, (5, 5), 0)
 
 
 def wiener_filter_1(frame):
