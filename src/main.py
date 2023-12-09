@@ -1,3 +1,4 @@
+# main.py
 from argparse import ArgumentParser
 
 import numpy as np
@@ -60,9 +61,13 @@ def get_transformations_between_frames(capture: cv2.VideoCapture) -> np.ndarray:
         
         # affine matrix decomposition
         # dx, dy represent the translation components and da the rotation component
-        dx = matrix[0][0][2]
-        dy = matrix[0][1][2]
-        da = np.arctan2(matrix[0][0][1], matrix[0][0][0])
+        if not matrix:
+            dx = matrix[0][0][2]
+            dy = matrix[0][1][2]
+            da = np.arctan2(matrix[0][0][1], matrix[0][0][0])
+        else:
+            dx, dy, da = 0, 0, 0
+
         transformations[frame_idx] = [dx, dy, da]
         # transformations[frame_idx + 1, :, :2] = matrix.T
 
@@ -85,7 +90,7 @@ def motion_compensation(transforms: np.ndarray,
 
 def fix_border(frame: np.ndarray, crop_ratio: float = 0.04) -> np.ndarray:
     w, h, _ = frame.shape
-    rotation_matrix = cv2.getRotationMatrix2D((h // 2, w // 2), 0, 1.0 + crop_ratio)
+    rotation_matrix = cv2.getRotationMatrix2D((w / 2, h / 2), 0, 1.0 + crop_ratio)
     frame = cv2.warpAffine(frame, rotation_matrix, (h, w))
     return frame
 
@@ -109,8 +114,13 @@ def output(capture: cv2.VideoCapture, smoothed_transforms: np.ndarray) -> None:
         ])
 
         w, h, _ = frame.shape
-        stabilized_frame = cv2.warpAffine(frame, transformation, (w, h))
-        img = fix_border(stabilized_frame)
+        stabilized_frame = cv2.warpAffine(frame, transformation, (h, w))
+        stabilized_frame = fix_border(stabilized_frame, crop_ratio=0.3)
+
+        img = np.hstack((
+            cv2.resize(frame, (0, 0), fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA),
+            cv2.resize(stabilized_frame, (0, 0), fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+        ))
 
         # TODO: wiener filter to remove deblurring
 
@@ -139,12 +149,11 @@ def main(video_file_path: str, *, plot: bool) -> None:
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(
-        prog="vstab", description="Video Stabilization", 
-        epilog="computer vision @ VUT"
-    )
+    parser = ArgumentParser(prog="vstab",
+                            description="Video Stabilization", 
+                            epilog="computer vision @ VUT")
     parser.add_argument("-i", "--input", help="input video file", required=True)
 
     args = parser.parse_args()
 
-    main(args.input, plot=True)
+    main(args.input, plot=False)
