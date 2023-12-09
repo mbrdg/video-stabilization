@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 
 import numpy as np
 import cv2
+from numpy.fft import fft2, ifft2
 
 import smoothing
 
@@ -83,15 +84,17 @@ def main(video: str) -> None:
         dx = smoothed_transforms[current_frame, 0]
         dy = smoothed_transforms[current_frame, 1]
         da = smoothed_transforms[current_frame, 2]
-        transformation_matrix = np.array([
-            [np.cos(da), -np.sin(da), dx],
-            [np.sin(da), np.cos(da), dy],
-        ])
+        transformation_matrix = np.array(
+            [
+                [np.cos(da), -np.sin(da), dx],
+                [np.sin(da), np.cos(da), dy],
+            ]
+        )
 
         w, h, _ = frame.shape
         stabilized_frame = cv2.warpAffine(frame, transformation_matrix, (w, h))
         img = crop(stabilized_frame)
- 
+
         cv2.imshow("frame", img)
         key = cv2.waitKey(30) & 0xFF
         if key == 27:
@@ -111,16 +114,79 @@ def motion_compensation(transforms: np.ndarray) -> np.ndarray:
     # Calculate difference in smoothed_trajectory and trajectory
     difference = smoothed_trajectory - trajectory
 
-    # Calculate newer transformation array
-    smoothed_transforms = transforms + difference
-    return smoothed_transforms
+    return transforms + difference
 
 
 def crop(frame: np.ndarray, crop_ratio: float = 0.04) -> np.ndarray:
     w, h, _ = frame.shape
     rotation_matrix = cv2.getRotationMatrix2D((h // 2, w // 2), 0, 1.0 + crop_ratio)
-    cropped_frame = cv2.warpAffine(frame, rotation_matrix, (h, w))
-    return cropped_frame
+    return cv2.warpAffine(frame, rotation_matrix, (h, w))
+
+
+def low_pass_filtering_1(frame):
+    # Initialize variables
+    homoFiltered = np.eye(3, dtype=np.float32)
+    alpha = 0.9
+    a1 = np.eye(3, dtype=np.float32) * alpha
+    a2 = np.eye(3, dtype=np.float32) * (1.0 - alpha)
+
+    # Assuming you have a function CalcHomography that returns the homography matrix
+    homo = cv2.findHomography(frame)  # Is wrong falta parametros
+
+    # Update filtered homography
+    homoFiltered = np.dot(a1, np.dot(homoFiltered, homo)) + np.dot(a2, homo)
+
+    # Apply stabilized transformation to the frame
+    stabilized_frame = cv2.warpPerspective(
+        frame, homoFiltered, (frame.shape[1], frame.shape[0])
+    )
+
+    # Display the stabilized frame (you can also save it or perform further processing)
+    cv2.imshow("Stabilized Frame", stabilized_frame)
+
+    return stabilized_frame
+
+
+def low_pass_filtering_2(frame):
+    # prepare the 5x5 shaped filter
+    kernel = np.array(
+        [
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+        ]
+    )
+    kernel = kernel / sum(kernel)
+
+    return cv2.filter2D(frame, -1, kernel)
+
+
+def low_pass_filtering_3(frame):
+    return cv2.GaussianBlur(frame, (5, 5), 0)
+
+
+def wiener_filter(frame):
+    kernel = np.array(
+        [
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+        ]
+    )
+    K = 10
+
+    kernel /= np.sum(kernel)
+    dummy = np.copy(frame)
+    dummy = fft2(dummy)
+    kernel = fft2(kernel, s=frame.shape)
+    kernel = np.conj(kernel) / (np.abs(kernel) ** 2 + K)
+    dummy = dummy * kernel
+    dummy = np.abs(ifft2(dummy))
+    return dummy
 
 
 if __name__ == "__main__":
