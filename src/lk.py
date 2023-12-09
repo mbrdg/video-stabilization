@@ -36,7 +36,7 @@ def get_transformations_between_frames(capture: cv2.VideoCapture) -> np.ndarray:
 
         success, curr_frame = capture.read()
         if not success:
-            logging.info("finished reading capture")
+            print("info: finished reading capture")
             break
 
         # Lucas-Kanade method to determine the optical flow
@@ -48,7 +48,7 @@ def get_transformations_between_frames(capture: cv2.VideoCapture) -> np.ndarray:
         )
 
         if new_corners is None:
-            logging.warning(f"unable to detect features in frame {frame_idx}")
+            print(f"warn: unable to detect features in frame {frame_idx}")
             continue
 
         # Filtering valid points that can be tracked
@@ -94,7 +94,7 @@ def output(capture: cv2.VideoCapture, smoothed_transforms: np.ndarray) -> None:
     for frame_idx in range(number_of_frames - 2):
         success, frame = capture.read()
         if not success:
-            logging.warning("unable to grab frame from video capture")
+            print("warn: unable to grab frame from video capture")
 
         dx = smoothed_transforms[frame_idx, 0]
         dy = smoothed_transforms[frame_idx, 1]
@@ -130,7 +130,10 @@ def main(video_file_path: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(prog="vstab", description="Video Stabilization")
+    parser = ArgumentParser(
+        prog="vstab", description="Video Stabilization", 
+        epilog="computer vision @ VUT"
+    )
     parser.add_argument("-i", "--input", help="input video file", required=True)
 
     args = parser.parse_args()
