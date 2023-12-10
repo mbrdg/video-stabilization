@@ -63,28 +63,47 @@ def get_transformations_between_frames(
         new_corners = new_corners[good_points]
         old_corners = old_corners[good_points]
 
-        matrix = cv2.estimateAffine2D(new_corners, old_corners)
+        if solver:
+            matrix, _ = cv2.estimateAffine2D(new_corners, old_corners)
+
+            if matrix is not None:
+                transformations[frame_idx + 1, :, :2] = matrix.T
+
+            prev_gray_frame = curr_gray_frame
+            continue
         
+        matrix = cv2.estimateAffine2D(new_corners, old_corners)
+
         # affine matrix decomposition
         # dx, dy represent the translation components and da the rotation component
-        if not matrix:
-            dx = matrix[0][0][2]
-            dy = matrix[0][1][2]
-            da = np.arctan2(matrix[0][0][1], matrix[0][0][0])
+        if matrix is None:
+            dx = matrix[0, 0, 2]
+            dy = matrix[0, 1, 2]
+            da = np.arctan2(matrix[0, 0, 1], matrix[0, 0, 0])
         else:
             dx, dy, da = 0, 0, 0
 
         transformations[frame_idx] = [dx, dy, da]
-        # transformations[frame_idx + 1, :, :2] = matrix.T
 
         prev_gray_frame = curr_gray_frame
     
     return transformations
 
 
-def motion_compensation(
-        transforms: np.ndarray, *, plot: bool
-    ) -> np.ndarray:
+def motion_compensation(transforms: np.ndarray, *, plot: bool) -> np.ndarray:
+    """
+    Performs the motion compensation procedure by applying a low pass filter
+    on top of the transformations between frames.
+
+    Params:
+    -------
+    transforms -- Affine transformation matrix between each pair of consecutive frames.
+    plot -- Plots the trajectory (cumulative sum of transformations) if True
+
+    Returns:
+    --------
+    An array with the same shape as transforms but smoothed.
+    """
     # Compute trajectory using cumulative sum of transformations
     trajectory = np.cumsum(transforms, axis=0)
     smoothed_trajectory = low_pass_filter(trajectory)
