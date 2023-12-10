@@ -5,7 +5,10 @@ import numpy as np
 import pulp
 
 
-def compute_crop_window(frame_shape: Tuple[float, float], crop_ratio: float) -> np.ndarray:
+def compute_crop_window(
+        frame_shape: Tuple[float, float],
+        crop_ratio: float
+    ) -> np.ndarray:
     """
     Computes the corners of a frame given a crop ratio.
 
@@ -18,8 +21,6 @@ def compute_crop_window(frame_shape: Tuple[float, float], crop_ratio: float) -> 
     -------
     An array containing the corners' position for the cropped frame
     """
-    assert 0.0 < crop_ratio <= 1.0
-
     w, h = frame_shape
     center_x, center_y = round(h / 2), round(w / 2)
     crop_w, crop_h = round(h * crop_ratio), round(w * crop_ratio)
@@ -38,12 +39,6 @@ def stabilize(
         frame_shape: Tuple[float, float],
         inv_crop_ratio: float = 0.8
     ) -> Tuple[int, np.ndarray]:
-    
-    default_transforms = np.full(frame_transforms.shape, np.eye(3))
-    if np.allclose(frame_transforms, default_transforms):
-        print("FAILURE")
-    else:
-        print("SUCCESS")
 
     # Predefined weights
     w1, w2, w3 = 10, 1, 100
