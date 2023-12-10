@@ -27,7 +27,8 @@ def fix_border(frame: np.ndarray, crop_ratio: float) -> np.ndarray:
 
 
 def output_from_filter(
-    capture: cv2.VideoCapture, smoothed_transforms: np.ndarray, crop_ratio: float
+    capture: cv2.VideoCapture, smoothed_transforms: np.ndarray, crop_ratio: float,
+    *, deblur: bool = False
 ) -> None:
     """
     Outputs the original frame and stabilized frames side-by-side.
@@ -73,8 +74,9 @@ def output_from_filter(
                 ),
             )
         )
-
-        wiener_filter(frame)
+        
+        if deblur:
+            wiener_filter(frame)
 
         cv2.imshow("stabilized video", img)
         key = cv2.waitKey(30) & 0xFF
@@ -85,7 +87,8 @@ def output_from_filter(
 
 
 def output_from_solver(
-    capture: cv2.VideoCapture, smoothed_transforms: np.ndarray, inv_crop_ratio: float
+    capture: cv2.VideoCapture, smoothed_transforms: np.ndarray, inv_crop_ratio: float,
+    *, deblur: bool = False
 ) -> None:
     """
     Outputs the original frame and stabilized frame side-by-side.
@@ -155,8 +158,9 @@ def output_from_solver(
                 ),
             )
         )
-
-        wiener_filter(frame)
+    
+        if deblur:
+            wiener_filter(frame)
 
         cv2.imshow("stabilized video", img)
         key = cv2.waitKey(30) & 0xFF
