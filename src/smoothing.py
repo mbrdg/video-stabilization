@@ -1,6 +1,5 @@
 # smoothing.py
 import numpy as np
-from numpy.fft import fft2, ifft2
 from skimage import restoration
 from scipy.signal import savgol_filter
 from scipy.signal import convolve2d
@@ -54,10 +53,5 @@ def wiener_filter(frame: np.ndarray) -> np.ndarray:
     """
 
     psf = np.ones((5, 5)) / 25
-    rng = np.random.default_rng()
-
-    img = convolve2d(frame, psf, "same")
-    img += 0.1 * img.std() * rng.standard_normal(img.shape)
-
-    return restoration.wiener(img, psf, 0.1)
+    return restoration.wiener(frame, psf, 0.1)
 
