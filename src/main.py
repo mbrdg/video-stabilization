@@ -216,7 +216,7 @@ def output_from_solver(
         transformation = shifting_back_matrix @ scaling_matrix @ \
             shifting_to_center_matrix @ np.linalg.inv(transform_matrix)
         
-        stabilized_frame = cv2.warpAffine(frame, transformation, (h, w))
+        stabilized_frame = cv2.warpAffine(frame, transformation[:2, :], (h, w))
 
         img = np.hstack((
             cv2.resize(frame, (0, 0), fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA),
