@@ -1,4 +1,4 @@
-# utils.py
+# plotting.py
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -60,5 +60,32 @@ def plot_trajectories(trajectory: np.ndarray, smoothed_trajectory: np.ndarray) -
     axis_plot(ax_dy, trajectory[:, 1], smoothed_trajectory[:, 1], "y")
     axis_plot(ax_da, trajectory[:, 2], smoothed_trajectory[:, 2], "a")
 
-    print("I should pass here")
     plt.show()
+
+
+def plot_trajectories_from_solver(trajectory: np.ndarray, smoothed_trajectory: np.ndarray) -> None:
+    """
+    Utilitary function to plot the trajectory components along the video when
+    smoothing is done using the solver. Otherwise, use `plot_trajectories`.
+
+    Params:
+    -------
+    trajectory -- array containing the values of the original trajectory of the
+                  relevant components
+    smoothed_trajectory --  array containing the values of the smoothed
+                            trajectory of the relevant components
+    """
+    assert trajectory.shape == smoothed_trajectory.shape
+    number_of_frames = trajectory.shape[0]
+
+    unstable_trajectory = trajectory.copy()
+    for frame in range(1, number_of_frames):
+        unstable_trajectory[frame, :, :] = unstable_trajectory[frame - 1, :, :] @ trajectory[frame, :, :]
+    
+    stable_trajecotry = unstable_trajectory.copy()
+    for frame in range(number_of_frames):
+        stable_trajecotry[frame, :, :] = unstable_trajectory[frame, :, :] @ smoothed_trajectory[frame, :, :]
+
+    origin = np.array([0, 0, 1])
+    plot_trajectories(origin @ unstable_trajectory, origin @ stable_trajecotry)
+

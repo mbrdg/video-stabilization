@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 
 from smoothing import low_pass_filter
-from plotting import plot_transformations, plot_trajectories
+from plotting import plot_trajectories_from_solver, plot_transformations, plot_trajectories
 from solve import stabilize
 from output import output_from_filter, output_from_solver
 
@@ -39,10 +39,10 @@ def get_transformations_between_frames(
         old_corners = cv2.goodFeaturesToTrack(
             prev_gray_frame,
             mask=None,
-            maxCorners=100,
-            qualityLevel=0.3,
-            minDistance=7,
-            blockSize=7,
+            maxCorners=200,
+            qualityLevel=0.1,
+            minDistance=30,
+            blockSize=3,
         )
 
         success, curr_frame = capture.read()
@@ -57,9 +57,6 @@ def get_transformations_between_frames(
             curr_gray_frame,
             old_corners,
             None,
-            winSize=(15, 15),
-            maxLevel=2,
-            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03),
         )
 
         if new_corners is None:
@@ -71,27 +68,15 @@ def get_transformations_between_frames(
         new_corners = new_corners[good_points]
         old_corners = old_corners[good_points]
 
+        matrix, _ = cv2.estimateAffine2D(new_corners, old_corners)
+
         if solver:
-            matrix, _ = cv2.estimateAffine2D(new_corners, old_corners)
-
-            if matrix is not None:
-                transformations[frame_idx + 1, :, :2] = matrix.T
-
-            prev_gray_frame = curr_gray_frame
-            continue
-
-        matrix = cv2.estimateAffine2D(new_corners, old_corners)
-
-        # affine matrix decomposition
-        # dx, dy represent the translation components and da the rotation component
-        if matrix is None:
-            dx = matrix[0, 0, 2]
-            dy = matrix[0, 1, 2]
-            da = np.arctan2(matrix[0, 0, 1], matrix[0, 0, 0])
+            transformations[frame_idx + 1, :, :2] = matrix.T
         else:
-            dx, dy, da = 0, 0, 0
-
-        transformations[frame_idx] = [dx, dy, da]
+            # affine matrix decomposition [dx, dy, da]
+            transformations[frame_idx] = np.array([
+                matrix[0, 2], matrix[1, 2], np.arctan2(matrix[0, 1], matrix[0, 0])
+            ])
 
         prev_gray_frame = curr_gray_frame
 
@@ -114,7 +99,7 @@ def motion_compensation(transforms: np.ndarray, *, plot: bool) -> np.ndarray:
     """
     # Compute trajectory using cumulative sum of transformations
     trajectory = np.cumsum(transforms, axis=0)
-    smoothed_trajectory = low_pass_filter(trajectory, radius=50, order=13)
+    smoothed_trajectory = low_pass_filter(trajectory, radius=50, order=2)
 
     if plot:
         plot_trajectories(trajectory, smoothed_trajectory)
@@ -137,12 +122,15 @@ def main(video_file_path: str, crop_ratio: float, *, solver: bool, plot: bool) -
 
     if solver:
         inv_crop_ratio = 1.0 - crop_ratio
-        status, smoothed_transforms = stabilize(
+        status, smoothed_transformations = stabilize(
             transformations, frame_shape, inv_crop_ratio
         )
+        
+        if plot and status == 1:
+            plot_trajectories_from_solver(transformations, smoothed_transformations)
 
         if status == 1:
-            output_from_solver(capture, smoothed_transforms, inv_crop_ratio)
+            output_from_solver(capture, smoothed_transformations, inv_crop_ratio)
             capture.release()
             return None
 
@@ -164,7 +152,8 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--input", help="input video file", required=True)
     parser.add_argument("-c", "--crop-ratio", type=float, required=True)
     parser.add_argument("--solver", action=BooleanOptionalAction)
+    parser.add_argument("--plot", action=BooleanOptionalAction)
 
     args = parser.parse_args()
 
-    main(args.input, args.crop_ratio, solver=args.solver, plot=False)
+    main(args.input, args.crop_ratio, solver=args.solver, plot=args.plot)
