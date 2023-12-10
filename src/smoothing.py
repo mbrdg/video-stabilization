@@ -39,30 +39,25 @@ def low_pass_filter(
     return smoothed_trajectory
 
 
-def wiener_filter_1(frame):
-    kernel = np.array(
-        [
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-        ]
-    )
-    K = 10
+def wiener_filter(frame: np.ndarray) -> np.ndarray:
+    """
+    Wiener-Hunt deconvolution to deblur a frame.
+    It is a wrapper 
 
-    kernel /= np.sum(kernel)
-    dummy = np.copy(frame)
-    dummy = fft2(dummy)
-    kernel = fft2(kernel, s=frame.shape)
-    kernel = np.conj(kernel) / (np.abs(kernel) ** 2 + K)
-    dummy = dummy * kernel
-    dummy = np.abs(ifft2(dummy))
-    return dummy
+    Params:
+    -------
+    frame -- frame to be deblured
 
+    Returns:
+    --------
+    Deblured input frame.
+    """
 
-def wiener_filter_2(frame):  # somos capazes de ter de meter a imagem a cinzento
     psf = np.ones((5, 5)) / 25
+    rng = np.random.default_rng()
+
     img = convolve2d(frame, psf, "same")
-    img += 0.1 * img.std() * np.random.standard_normal(img.shape)
-    return restoration.wiener(img, psf, 1100)
+    img += 0.1 * img.std() * rng.standard_normal(img.shape)
+
+    return restoration.wiener(img, psf, 0.1)
+

@@ -2,6 +2,8 @@
 import numpy as np
 import cv2
 
+from smoothing import wiener_filter
+
 
 def fix_border(frame: np.ndarray, crop_ratio: float) -> np.ndarray:
     """
@@ -72,7 +74,7 @@ def output_from_filter(
             )
         )
 
-        # TODO: wiener filter to remove deblurring
+        wiener_filter(frame)
 
         cv2.imshow("stabilized video", img)
         key = cv2.waitKey(30) & 0xFF
@@ -154,7 +156,7 @@ def output_from_solver(
             )
         )
 
-        # TODO: wiener filter to remove deblurring
+        wiener_filter(frame)
 
         cv2.imshow("stabilized video", img)
         key = cv2.waitKey(30) & 0xFF
