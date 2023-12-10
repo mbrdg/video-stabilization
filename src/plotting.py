@@ -62,4 +62,3 @@ def plot_trajectories(trajectory: np.ndarray, smoothed_trajectory: np.ndarray) -
 
     print("I should pass here")
     plt.show()
-

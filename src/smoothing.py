@@ -1,6 +1,5 @@
 # smoothing.py
 import numpy as np
-import cv2
 from numpy.fft import fft2, ifft2
 from skimage import restoration
 from scipy.signal import savgol_filter
@@ -8,11 +7,11 @@ from scipy.signal import convolve2d
 
 
 def low_pass_filter(
-        trajectory: np.ndarray,
-        iterations: int = 1,
-        radius: int = 30,
-        order: int = 1,
-    ) -> np.ndarray:
+    trajectory: np.ndarray,
+    iterations: int = 1,
+    radius: int = 30,
+    order: int = 1,
+) -> np.ndarray:
     """
     Low-pass filter employing the Savitzky-Golay method.
     If `order` is set to 1 then this acts as a moving average filter.
@@ -67,5 +66,3 @@ def wiener_filter_2(frame):  # somos capazes de ter de meter a imagem a cinzento
     img = convolve2d(frame, psf, "same")
     img += 0.1 * img.std() * np.random.standard_normal(img.shape)
     return restoration.wiener(img, psf, 1100)
-
-
