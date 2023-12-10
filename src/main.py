@@ -1,14 +1,18 @@
 # main.py
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 
 import numpy as np
 import cv2
 
 from smoothing import low_pass_filter
 from plotting import plot_transformations, plot_trajectories
+from solve import stabilize
 
 
-def get_transformations_between_frames(capture: cv2.VideoCapture) -> np.ndarray:
+def get_transformations_between_frames(
+        capture: cv2.VideoCapture,
+        *, solver: bool
+    ) -> np.ndarray:
     """
     Gets the transformations between frames using sparse Lucas-Kanade optical 
     flow method. Resets the capture back to the initial frame before finishing.
@@ -22,8 +26,10 @@ def get_transformations_between_frames(capture: cv2.VideoCapture) -> np.ndarray:
     An array containing the decomposed affine transformations between frames.
     """
     number_of_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-    transformations = np.empty(shape=(number_of_frames - 1, 3), dtype=np.float32)
-    # transformations = np.full(number_of_frames, np.eye(3), dtype=np.float32)
+
+    transformations = np.empty(shape=(number_of_frames - 1, 3))
+    if solver:
+        transformations = np.full((number_of_frames, 3, 3), np.eye(3))
     
     success, prev_frame = capture.read()
     prev_gray_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
@@ -89,14 +95,32 @@ def motion_compensation(
     return transforms + (smoothed_trajectory - trajectory)
 
 
-def fix_border(frame: np.ndarray, crop_ratio: float = 0.04) -> np.ndarray:
+def fix_border(frame: np.ndarray, crop_ratio: float) -> np.ndarray:
+    """
+    Applies upscaling in order to hide black borders after applying the warpAffine
+    with the smoothen frame transformation. It create a rotation matrix focused
+    on the center of the frame and applies some scaling w.r.t. crop ratio.
+
+    Params:
+    -------
+    frame -- frame from the original video to be upscalled after applied transformation.
+    crop_ratio -- value in [0.0, 1.0] that represents the upscaling factor.
+
+    Returns:
+    --------
+    Upscaled frame that should be part of the output video
+    """
     w, h, _ = frame.shape
     rotation_matrix = cv2.getRotationMatrix2D((w / 2, h / 2), 0, 1.0 + crop_ratio)
     frame = cv2.warpAffine(frame, rotation_matrix, (h, w))
     return frame
 
 
-def output(capture: cv2.VideoCapture, smoothed_transforms: np.ndarray) -> None:
+def output(
+        capture: cv2.VideoCapture,
+        smoothed_transforms: np.ndarray,
+        crop_ratio: float
+    ) -> None:
     number_of_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
     capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -116,7 +140,7 @@ def output(capture: cv2.VideoCapture, smoothed_transforms: np.ndarray) -> None:
 
         w, h, _ = frame.shape
         stabilized_frame = cv2.warpAffine(frame, transformation, (h, w))
-        stabilized_frame = fix_border(stabilized_frame, crop_ratio=0.3)
+        stabilized_frame = fix_border(stabilized_frame, crop_ratio)
 
         img = np.hstack((
             cv2.resize(frame, (0, 0), fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA),
@@ -133,18 +157,35 @@ def output(capture: cv2.VideoCapture, smoothed_transforms: np.ndarray) -> None:
     cv2.destroyWindow("stabilized video")
 
 
-def main(video_file_path: str, *, plot: bool) -> None:
-    capture = cv2.VideoCapture(video_file_path)
+def main(
+        video_file_path: str,
+        crop_ratio: float,
+        *, solver: bool, plot: bool
+    ) -> None:
+    assert 0.0 < crop_ratio < 1.0
 
-    transformations = get_transformations_between_frames(capture)
+    capture = cv2.VideoCapture(video_file_path)
+    frame_shape = (
+        int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
+        int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    )
+
+    transformations = get_transformations_between_frames(capture, solver=solver)
     if plot:
         plot_transformations(transformations, smoothed=False)
 
-    smoothed_transforms = motion_compensation(transformations, plot=plot)
+    if solver:
+        status, smoothed_transforms = stabilize(transformations, frame_shape, 1.0 - crop_ratio)
+        if status != 1:
+            print("warn: solution did not converge, fallback to default method")
+            smoothed_transforms = motion_compensation(transformations, plot=False)
+    else:
+        smoothed_transforms = motion_compensation(transformations, plot=plot)
+
     if plot:
         plot_transformations(smoothed_transforms, smoothed=True)
 
-    output(capture, smoothed_transforms)
+    output(capture, smoothed_transforms, crop_ratio)
 
     capture.release()
 
@@ -154,7 +195,9 @@ if __name__ == "__main__":
                             description="Video Stabilization", 
                             epilog="computer vision @ VUT")
     parser.add_argument("-i", "--input", help="input video file", required=True)
+    parser.add_argument("-c", "--crop-ratio", type=float, required=True)
+    parser.add_argument("--solver", action=BooleanOptionalAction)
 
     args = parser.parse_args()
 
-    main(args.input, plot=False)
+    main(args.input, args.crop_ratio, solver=args.solver, plot=False)
