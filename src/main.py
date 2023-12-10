@@ -192,9 +192,9 @@ def output_from_solver(
             print("warn: unable to grab frame from video capture")
 
         scaling_matrix = np.array([
-            [1.0 / inv_crop_ratio,  0.0,                0.0],
-            [0.0,               1.0 / inv_crop_ratio,   0.0],
-            [0.0,               0.0,                1.0],
+            [1.0 / inv_crop_ratio,  0.0,                    0.0],
+            [0.0,                   1.0 / inv_crop_ratio,   0.0],
+            [0.0,                   0.0,                    1.0],
         ])
 
         w, h, _ = frame.shape
@@ -202,17 +202,17 @@ def output_from_solver(
         shifting_to_center_matrix = np.array([
             [1.0, 0.0, -w / 2.0],
             [0.0, 1.0, -h / 2.0],
-            [0.0, 0.0, 1.0     ],
+            [0.0, 0.0,      1.0],
         ])
 
         shifting_back_matrix = np.array([
             [1.0, 0.0, w / 2.0],
             [0.0, 1.0, h / 2.0],
-            [0.0, 0.0, 1.0    ],
+            [0.0, 0.0,     1.0],
         ])
 
         transform_matrix = np.eye(3)
-        transform_matrix = smoothed_transform[frame_idx, :, :2].T
+        transform_matrix[:2][:] = smoothed_transform[frame_idx, :, :2].T
         transformation = shifting_back_matrix @ scaling_matrix @ \
             shifting_to_center_matrix @ np.linalg.inv(transform_matrix)
         
