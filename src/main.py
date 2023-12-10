@@ -1,5 +1,6 @@
 # main.py
 from argparse import ArgumentParser, BooleanOptionalAction
+from cv2.gapi import crop
 
 import numpy as np
 import cv2
@@ -176,6 +177,62 @@ def output(
     cv2.destroyWindow("stabilized video")
 
 
+def output_from_solver(
+        capture: cv2.VideoCapture,
+        smoothed_transform: np.ndarray,
+        inv_crop_ratio: float
+    ) -> None:
+    number_of_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+    for frame_idx in range(number_of_frames - 2):
+        success, frame = capture.read()
+        if not success:
+            print("warn: unable to grab frame from video capture")
+
+        scaling_matrix = np.array([
+            [1.0 / inv_crop_ratio,  0.0,                0.0],
+            [0.0,               1.0 / inv_crop_ratio,   0.0],
+            [0.0,               0.0,                1.0],
+        ])
+
+        w, h, _ = frame.shape
+
+        shifting_to_center_matrix = np.array([
+            [1.0, 0.0, -w / 2.0],
+            [0.0, 1.0, -h / 2.0],
+            [0.0, 0.0, 1.0     ],
+        ])
+
+        shifting_back_matrix = np.array([
+            [1.0, 0.0, w / 2.0],
+            [0.0, 1.0, h / 2.0],
+            [0.0, 0.0, 1.0    ],
+        ])
+
+        transform_matrix = np.eye(3)
+        transform_matrix = smoothed_transform[frame_idx, :, :2].T
+        transformation = shifting_back_matrix @ scaling_matrix @ \
+            shifting_to_center_matrix @ np.linalg.inv(transform_matrix)
+        
+        stabilized_frame = cv2.warpAffine(frame, transformation, (h, w))
+
+        img = np.hstack((
+            cv2.resize(frame, (0, 0), fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA),
+            cv2.resize(stabilized_frame, (0, 0), fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+        ))
+
+        # TODO: wiener filter to remove deblurring
+
+        cv2.imshow("stabilized video", img)
+        key = cv2.waitKey(30) & 0xff
+        if key == 27:
+            break
+
+    cv2.destroyWindow("stabilized video")
+
+
 def main(
         video_file_path: str,
         crop_ratio: float,
@@ -194,18 +251,23 @@ def main(
         plot_transformations(transformations, smoothed=False)
 
     if solver:
-        status, smoothed_transforms = stabilize(transformations, frame_shape, 1.0 - crop_ratio)
-        if status != 1:
-            print("warn: solution did not converge, fallback to default method")
-            smoothed_transforms = motion_compensation(transformations, plot=False)
-    else:
-        smoothed_transforms = motion_compensation(transformations, plot=plot)
+        inv_crop_ratio = 1.0 - crop_ratio
+        status, smoothed_transforms = stabilize(transformations, frame_shape, inv_crop_ratio)
+        
+        if status == 1:
+            output_from_solver(capture, smoothed_transforms, inv_crop_ratio)
+            capture.release()
+            return None
 
+        else:
+            print("warn: solution did not converge, using default method")
+
+
+    smoothed_transforms = motion_compensation(transformations, plot=plot)
     if plot:
         plot_transformations(smoothed_transforms, smoothed=True)
 
     output(capture, smoothed_transforms, crop_ratio)
-
     capture.release()
 
 
