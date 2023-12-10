@@ -51,7 +51,13 @@ def wiener_filter(frame: np.ndarray) -> np.ndarray:
     --------
     Deblured input frame.
     """
+    deblured_frame = frame.copy()
 
     psf = np.ones((5, 5)) / 25
-    return restoration.wiener(frame, psf, 0.1)
+
+    deblured_frame[:, :, 0] = restoration.wiener(frame[:, :, 0], psf, 0.1)
+    deblured_frame[:, :, 1] = restoration.wiener(frame[:, :, 1], psf, 0.1)
+    deblured_frame[:, :, 2] = restoration.wiener(frame[:, :, 2], psf, 0.1)
+
+    return deblured_frame
 
