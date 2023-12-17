@@ -1,11 +1,14 @@
 # stab.py
 import argparse
+import pathlib
 
-import numpy as np
 import cv2
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 SMOOTHING_RADIUS = 50
+UPSCALING = 0.20
 
 
 def moving_average(curve, radius):
@@ -29,21 +32,54 @@ def smooth(trajectory):
     return smoothed_trajectory
 
 
-def fix_border(frame, upscale=0.20):
+def fix_border(frame):
     s = frame.shape
 
-    t = cv2.getRotationMatrix2D((s[1] / 2, s[0] / 2), 0, 1 + upscale)
+    t = cv2.getRotationMatrix2D((s[1] / 2, s[0] / 2), 0, 1.0 + UPSCALING)
     frame = cv2.warpAffine(frame, t, (s[1], s[0]))
 
     return frame
 
 
+def plot_trajectories(original, smoothed, file):
+    assert original.shape == smoothed.shape
+
+    frames = np.arange(original.shape[0])
+
+    fig, ax = plt.subplots(nrows=3, ncols=1, dpi=600, layout="tight")
+    fig.suptitle(f"Trajectories over {file.name}")
+
+    ax[0].plot(frames, original[:, 0], label="original")
+    ax[0].plot(frames, smoothed[:, 0], label="smooth")
+    ax[0].set_xlabel("frames")
+    ax[0].set_ylabel("$dx$")
+    ax[0].legend(loc="upper right")
+
+    ax[1].plot(frames, original[:, 1], label="original")
+    ax[1].plot(frames, smoothed[:, 1], label="smooth")
+    ax[1].set_xlabel("frames")
+    ax[1].set_ylabel("$dy$")
+    ax[1].legend(loc="upper right")
+
+    ax[2].plot(frames, original[:, 2], label="original")
+    ax[2].plot(frames, smoothed[:, 2], label="smooth")
+    ax[2].set_xlabel("frames")
+    ax[2].set_ylabel("$da$")
+    ax[2].legend(loc="upper right")
+
+    plots = pathlib.Path("plots/")
+    plots.mkdir(parents=True, exist_ok=True)
+    fig.savefig((plots / file).with_suffix(".pdf"))
+
+
 def main():
     parser = argparse.ArgumentParser(prog="stab", description="video stabilizer")
-    parser.add_argument("-i", "--input", required=True, help="input video file")
+    parser.add_argument("-i", "--input", required=True, help="video file input")
+    parser.add_argument("--plot", action=argparse.BooleanOptionalAction, help="plot trajectories")
     args = parser.parse_args()
 
-    cap = cv2.VideoCapture(args.input)
+    input = pathlib.Path(args.input)
+    cap = cv2.VideoCapture(str(input))
 
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
@@ -80,7 +116,7 @@ def main():
         m = cv2.estimateAffinePartial2D(prev_pts, curr_pts)[0]
 
         if m is None:
-            print("info: unable to generate transformation because frame was to dark")
+            print("warn: unable to generate transformation")
             transforms[i] = np.zeros(3)
         else:
             dx = m[0, 2]
@@ -92,6 +128,9 @@ def main():
 
     trajectory = np.cumsum(transforms, axis=0)
     smoothed_trajectory = smooth(trajectory)
+
+    if args.plot:
+        plot_trajectories(trajectory, smoothed_trajectory, input)
 
     difference = smoothed_trajectory - trajectory
     transforms_smooth = transforms + difference
