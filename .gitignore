@@ -1,6 +1,7 @@
-# Dataset (DeepStab)
+# Dataset (DeepStab) and other output related folders
 data/
 plots/
+output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -69,17 +69,18 @@ def plot_trajectories(original, smoothed, file):
 
     plots = pathlib.Path("plots/")
     plots.mkdir(parents=True, exist_ok=True)
-    fig.savefig((plots / file).with_suffix(".pdf"))
+    fig.savefig((plots / file.stem).with_suffix(".pdf"))
 
 
 def main():
     parser = argparse.ArgumentParser(prog="stab", description="video stabilizer")
     parser.add_argument("-i", "--input", required=True, help="video file input")
     parser.add_argument("--plot", action=argparse.BooleanOptionalAction, help="plot trajectories")
+    parser.add_argument("-o", "--output", help="video file output")
     args = parser.parse_args()
 
-    input = pathlib.Path(args.input)
-    cap = cv2.VideoCapture(str(input))
+    vid = pathlib.Path(args.input)
+    cap = cv2.VideoCapture(str(vid))
 
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
@@ -130,12 +131,21 @@ def main():
     smoothed_trajectory = smooth(trajectory)
 
     if args.plot:
-        plot_trajectories(trajectory, smoothed_trajectory, input)
+        plot_trajectories(trajectory, smoothed_trajectory, vid)
 
     difference = smoothed_trajectory - trajectory
     transforms_smooth = transforms + difference
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+    writer = None
+    if args.output:
+        out = pathlib.Path(args.output)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        fourcc = cv2.VideoWriter.fourcc(*'mp4v')
+        writer = cv2.VideoWriter(str(out), fourcc, fps, (w, h))
 
     for i in range(n_frames - 2):
         ret, frame = cap.read()
@@ -159,8 +169,14 @@ def main():
         if (frame_out.shape[1] > 1920):
             frame_out = cv2.resize(frame_out, (frame_out.shape[1] // 2, frame_out.shape[0] // 2))
 
+        if writer is not None:
+            writer.write(frame_out)
+
         cv2.imshow("stab", frame_out)
         cv2.waitKey(30)
+
+    if writer is not None:
+        writer.release()
 
     cv2.destroyAllWindows()
     cap.release()
