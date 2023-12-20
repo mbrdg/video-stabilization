@@ -47,24 +47,24 @@ def plot_trajectories(original, smoothed, file):
     frames = np.arange(original.shape[0])
 
     fig, ax = plt.subplots(nrows=3, ncols=1, dpi=600, layout="tight")
-    fig.suptitle(f"Trajectories over {file.name}")
+    fig.suptitle(f"Trajectories over video no. {file.stem}")
 
     ax[0].plot(frames, original[:, 0], label="original")
     ax[0].plot(frames, smoothed[:, 0], label="smooth")
     ax[0].set_xlabel("frames")
-    ax[0].set_ylabel("$dx$")
+    ax[0].set_ylabel("$x$ [px]")
     ax[0].legend(loc="upper right")
 
     ax[1].plot(frames, original[:, 1], label="original")
     ax[1].plot(frames, smoothed[:, 1], label="smooth")
     ax[1].set_xlabel("frames")
-    ax[1].set_ylabel("$dy$")
+    ax[1].set_ylabel("$y$ [px]")
     ax[1].legend(loc="upper right")
 
     ax[2].plot(frames, original[:, 2], label="original")
     ax[2].plot(frames, smoothed[:, 2], label="smooth")
     ax[2].set_xlabel("frames")
-    ax[2].set_ylabel("$da$")
+    ax[2].set_ylabel("$\\theta$ [rad]")
     ax[2].legend(loc="upper right")
 
     plots = pathlib.Path("plots/")
