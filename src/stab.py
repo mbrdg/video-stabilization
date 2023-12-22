@@ -72,13 +72,7 @@ def plot_trajectories(original, smoothed, file):
     fig.savefig((plots / file.stem).with_suffix(".pdf"))
 
 
-def main():
-    parser = argparse.ArgumentParser(prog="stab", description="video stabilizer")
-    parser.add_argument("-i", "--input", required=True, help="video file input")
-    parser.add_argument("--plot", action=argparse.BooleanOptionalAction, help="plot trajectories")
-    parser.add_argument("-o", "--output", help="video file output")
-    args = parser.parse_args()
-
+def main(args):
     vid = pathlib.Path(args.input)
     cap = cv2.VideoCapture(str(vid))
 
@@ -181,6 +175,14 @@ def main():
     cv2.destroyAllWindows()
     cap.release()
 
+    return n_frames
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(prog="stab", description="video stabilizer")
+    parser.add_argument("-i", "--input", required=True, help="video file input")
+    parser.add_argument("--plot", action=argparse.BooleanOptionalAction, help="plot trajectories")
+    parser.add_argument("-o", "--output", help="video file output")
+    args = parser.parse_args()
+
+    main(args)
