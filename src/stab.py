@@ -139,7 +139,7 @@ def main(args):
         
         fps = cap.get(cv2.CAP_PROP_FPS)
         fourcc = cv2.VideoWriter.fourcc(*'mp4v')
-        writer = cv2.VideoWriter(str(out), fourcc, fps, (w, h))
+        writer = cv2.VideoWriter(str(out), fourcc, fps, (w, h // 2))
 
     for i in range(n_frames - 2):
         ret, frame = cap.read()
